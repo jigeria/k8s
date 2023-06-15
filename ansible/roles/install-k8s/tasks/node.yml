@@ -1,0 +1,12 @@
+- name: Set kubeadm join command
+  ansible.builtin.set_fact:
+    kubejoin_cmd: "kubeadm join {{ hostvars['vm1']['ansible_host'] }}:6443 --token {{ hostvars['K8S_HOLDER']['token'] }} --discovery-token-ca-cert-hash sha256:{{ hostvars['K8S_HOLDER']['hash'] }}"
+
+- name: print_hostvars
+  ansible.builtin.debug:
+    msg: "{{ kubejoin_cmd }}"
+
+- name: Run kubeadm join
+  become: yes
+  ansible.builtin.shell:
+    cmd: "{{ kubejoin_cmd }}"

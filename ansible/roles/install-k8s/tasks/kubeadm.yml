@@ -1,0 +1,136 @@
+- name: Install kubeadm
+  become: yes
+  vars:
+    containerd_version: 1.7.2
+    runc_version: 1.1.7
+    cni_plugin_version: 1.3.0
+    k8s_version: 1.26.0-00
+  block:
+    - ansible.builtin.shell:
+        cmd: dpkg --print-architecture
+      register: arch
+    - name: Setup modules-load.d/k8s.conf
+      ansible.builtin.lineinfile:
+        path: "/etc/modules-load.d/k8s.conf"
+        line: "{{ item }}"
+        create: yes
+      with_items:
+        - "overlay"
+        - "br_netfilter"
+    
+    - name: Setup sysctl.d/k8s.conf
+      ansible.builtin.lineinfile:
+        path: "/etc/sysctl.d/k8s.conf"
+        line: "{{ item }}"
+        create: yes
+      with_items:
+        - "net.bridge.bridge-nf-call-iptables  = 1"
+        - "net.bridge.bridge-nf-call-ip6tables = 1"
+        - "net.ipv4.ip_forward                 = 1"
+
+    - name: Run modprobe
+      ansible.builtin.shell:
+        cmd: "{{ item }}"
+      with_items:
+        - modprobe overlay
+        - modprobe br_netfilter
+    
+    - name: Apply sysctl params without reboot & turn off swap memory
+      ansible.builtin.shell:
+        cmd: "{{ item }}"
+      with_items:
+        - sysctl --system
+        - swapoff -a
+
+    - name: Unarchive containerd
+      ansible.builtin.unarchive:
+        src:  https://github.com/containerd/containerd/releases/download/v{{ containerd_version }}/containerd-{{ containerd_version }}-linux-{{ arch.stdout }}.tar.gz
+        dest: /usr/local
+        remote_src: yes
+    
+    - name: Download containerd.service
+      ansible.builtin.get_url:
+        url: https://raw.githubusercontent.com/containerd/containerd/main/containerd.service
+        dest: /usr/lib/systemd/system/containerd.service
+    
+    - name: Create a containerd directory if it does not exist
+      ansible.builtin.file:
+        path: /etc/containerd
+        state: directory
+        mode: '0755'
+
+    - name: Setup containerd/config.toml
+      ansible.builtin.shell:
+        cmd: "{{ item }}"
+      with_items:
+        - containerd config default > /etc/containerd/config.toml
+        - sed -i 's/SystemdCgroup = false/SystemdCgroup = true/g' /etc/containerd/config.toml
+    
+    - name: Enable containerd service
+      ansible.builtin.systemd:
+        name: containerd
+        state: started
+        daemon_reload: true
+        enabled: true
+    
+    - name: Download runc
+      ansible.builtin.get_url:
+        url: https://github.com/opencontainers/runc/releases/download/v{{ runc_version }}/runc.{{ arch.stdout }}
+        dest: /home/{{ ansible_user }}/runc.{{ arch.stdout }}
+    
+    - name: Setup containerd/config.toml
+      ansible.builtin.shell:
+        cmd: install -m 755 /home/{{ ansible_user }}/runc.{{ arch.stdout }} /usr/local/sbin/runc
+    
+    - name: Create a cni directory if it does not exist
+      ansible.builtin.file:
+        path: /opt/cni/bin
+        state: directory
+        mode: '0755'
+
+    - name: Unarchive cni-plugin
+      ansible.builtin.unarchive:
+        creates: /opt/cni/bin
+        src: https://github.com/containernetworking/plugins/releases/download/v{{ cni_plugin_version }}/cni-plugins-linux-{{ arch.stdout }}-v{{ cni_plugin_version }}.tgz
+        dest: /opt/cni/bin
+        remote_src: yes
+    
+    - name: Restart containerd service
+      ansible.builtin.systemd:
+        name: containerd
+        state: restarted
+        enabled: true
+    
+    - name: Install utils
+      ansible.builtin.apt:
+        update_cache: yes
+        pkg:
+          - apt-transport-https
+          - ca-certificates
+          - curl
+    
+    - name: Download k8s apt-key
+      ansible.builtin.get_url:
+        url: https://dl.k8s.io/apt/doc/apt-key.gpg
+        dest: /usr/share/keyrings/kubernetes-archive-keyring.gpg 
+    
+    - name: Apply sysctl params without reboot & turn off swap memory
+      ansible.builtin.shell:
+        cmd: echo "deb [signed-by=/usr/share/keyrings/kubernetes-archive-keyring.gpg] https://apt.kubernetes.io/ kubernetes-xenial main" | tee /etc/apt/sources.list.d/kubernetes.list
+
+    - name: Install kubelet & kubeadm & kubectl
+      ansible.builtin.apt:
+        update_cache: yes
+        pkg:
+          - kubelet={{ k8s_version }}
+          - kubeadm={{ k8s_version }}
+          - kubectl={{ k8s_version }}
+    
+    - name: Prevent kubelet & kubeadm & kubectl from being upgraded
+      ansible.builtin.dpkg_selections:
+        name: "{{ item }}"
+        selection: hold
+      with_items:
+        - kubelet
+        - kubeadm
+        - kubectl

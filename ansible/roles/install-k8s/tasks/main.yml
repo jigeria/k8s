@@ -1,0 +1,9 @@
+---
+# tasks file for install k8s
+- include_tasks: kubeadm.yml
+
+- include_tasks: master.yml
+  when: "'master' in group_names"
+
+- include_tasks: node.yml
+  when: "'nodes' in group_names"

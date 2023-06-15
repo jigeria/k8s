@@ -1,0 +1,50 @@
+- name: Init kubeadm
+  become: yes
+  ansible.builtin.shell:
+    cmd: kubeadm init --pod-network-cidr=10.244.0.0/16
+
+- name: kubeadm_token
+  become: yes
+  ansible.builtin.shell:
+    cmd: kubeadm token list | awk 'NR == 2  { print $1}'
+  register: K8S_TOKEN
+
+- name: kubeadm_token
+  ansible.builtin.debug:
+    msg: "{{ K8S_TOKEN.stdout }}"
+
+- name: hash
+  become: yes
+  ansible.builtin.shell:
+    cmd: openssl x509 -pubkey -in /etc/kubernetes/pki/ca.crt | openssl rsa -pubin -outform der 2>/dev/null | openssl dgst -sha256 -hex | sed 's/^.* //'
+  register: K8S_MASTER_CA_HASH
+
+- name: hash
+  ansible.builtin.debug:
+    msg: "{{ K8S_MASTER_CA_HASH.stdout }}"
+
+- name: Add a host alias that we reach through a tunnel (Ansible 1.9 and older)
+  ansible.builtin.add_host:
+    name: "K8S_HOLDER"
+    token: '{{ K8S_TOKEN.stdout }}'
+    hash: '{{ K8S_MASTER_CA_HASH.stdout }}'
+
+- name: Create a kube directory if it does not exist
+  ansible.builtin.file:
+    path: $HOME/.kube
+    state: directory
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: '0755'
+
+- name: hash
+  become: yes
+  ansible.builtin.shell:
+    cmd: "{{ item }}"
+  with_items:
+    - cp -i /etc/kubernetes/admin.conf /home/{{ ansible_user }}/.kube/config
+    - chown 1000:1000 /home/{{ ansible_user }}/.kube/config
+
+- name: Apply cni
+  ansible.builtin.shell:
+    cmd: kubectl apply -f https://github.com/flannel-io/flannel/releases/latest/download/kube-flannel.yml

@@ -1,0 +1,155 @@
+- name: Forwarding IPv4 and letting iptables see bridged traffic
+  hosts: all
+  become: true
+  tasks:
+    - ansible.builtin.lineinfile:
+        path: "{{ item.path }}" 
+        line: "{{ item.line }}"
+        create: true
+      loop:
+        - { path: "/etc/modules-load.d/k8s.conf", line: "overlay" }
+        - { path: "/etc/modules-load.d/k8s.conf", line: "br_netfilter" }
+        - { path: "/etc/sysctl.d/k8s.conf", line: "net.bridge.bridge-nf-call-iptables  = 1"}
+        - { path: "/etc/sysctl.d/k8s.conf", line: "net.bridge.bridge-nf-call-ip6tables = 1"}
+        - { path: "/etc/sysctl.d/k8s.conf", line: "net.ipv4.ip_forward                 = 1"}
+    - community.general.modprobe:
+        name: "{{ item }}"
+      loop:
+        - overlay
+        - br_netfilter
+    - ansible.builtin.shell:
+        cmd: sysctl --system
+
+- name: Installing containerd
+  hosts: all
+  become: true
+  vars:
+    containerd_version: 1.6.20
+    runc_version: 1.1.7
+    cni_plugin_version: 1.2.0
+  tasks:
+    - ansible.builtin.shell:
+        cmd: dpkg --print-architecture
+      register: arch
+    - ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+      loop:
+        - /opt/cni/bin
+        - /etc/containerd
+    - ansible.builtin.unarchive:
+        src: "{{ item.src }}"
+        dest: "{{ item.dest }}"
+        remote_src: yes
+      loop:
+        - { src: "https://github.com/containerd/containerd/releases/download/v{{ containerd_version }}/containerd-{{ containerd_version }}-linux-{{ arch.stdout }}.tar.gz", dest: "/usr/local"}
+        - { src: "https://github.com/containernetworking/plugins/releases/download/v{{ cni_plugin_version }}/cni-plugins-linux-{{ arch.stdout }}-v{{ cni_plugin_version }}.tgz", dest: "/opt/cni/bin" }
+    - ansible.builtin.get_url:
+        url: "{{ item.url }}" 
+        dest: "{{ item.dest }}" 
+        mode: "{{ item.mode | default(omit) }}"
+      loop:
+        - { url: "https://raw.githubusercontent.com/containerd/containerd/main/containerd.service", dest: "/usr/lib/systemd/system/containerd.service"}
+        - { url: "https://github.com/opencontainers/runc/releases/download/v{{ runc_version }}/runc.{{ arch.stdout }}", dest: "/usr/local/sbin/runc", mode: "u=rwx,g=rx,o=rx" }
+    - ansible.builtin.shell:
+        cmd: |
+          containerd config default > /etc/containerd/config.toml
+    - ansible.builtin.lineinfile:
+        path: /etc/containerd/config.toml
+        state: absent
+        line: '            SystemdCgroup = false'
+    - ansible.builtin.lineinfile:
+        path: /etc/containerd/config.toml
+        insertafter: '.*\[plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runc.options\]$'
+        line: '            SystemdCgroup = true'
+        state: present
+    - ansible.builtin.systemd:
+        name: containerd 
+        state: started
+        enabled: true
+        daemon_reload: true
+
+- name: Swapoff
+  hosts: all
+  become: true
+  tasks:
+    - ansible.builtin.mount:
+        name: "{{ item }}"
+        fstype: swap
+        state: absent
+      with_items:
+        - swap
+        - none
+    - ansible.builtin.shell:
+        cmd: swapoff -a
+      when: ansible_swaptotal_mb > 0
+
+- name: Installing kubeadm, kubelet, kubectl
+  hosts: all
+  become: true
+  vars:
+    version: 1.26.0-00
+  tasks:
+    - ansible.builtin.apt:
+        update_cache: yes
+        pkg:
+          - apt-transport-https
+          - ca-certificates
+          - curl
+    - ansible.builtin.apt_key:
+        url: https://packages.cloud.google.com/apt/doc/apt-key.gpg
+        state: present
+
+    - ansible.builtin.apt_repository:
+        repo: deb https://apt.kubernetes.io/ kubernetes-xenial main
+        state: present
+        filename: kubernetes.list
+
+    - ansible.builtin.apt:
+        update_cache: yes
+        pkg:
+          - "kubelet={{ version }}"
+          - "kubeadm={{ version }}"
+          - "kubectl={{ version }}"
+
+    - ansible.builtin.dpkg_selections:
+        name: "{{ item }}"
+        selection: hold
+      loop:
+        - kubeadm
+        - kubelet
+        - kubectl
+
+- name: Init Cluster
+  hosts: master
+  become: true
+  tasks:
+    - ansible.builtin.stat:
+        path: /etc/kubernetes/pki/ca.key
+      register: kubeadm_ca
+
+    - ansible.builtin.shell:
+        cmd: kubeadm init --pod-network-cidr=10.244.0.0/16
+      when: not kubeadm_ca.stat.exists
+
+    - ansible.builtin.shell:
+        cmd: kubectl apply -f https://github.com/flannel-io/flannel/releases/latest/download/kube-flannel.yml
+      environment:
+        KUBECONFIG: /etc/kubernetes/admin.conf
+
+    - ansible.builtin.fetch:
+        src: /etc/kubernetes/admin.conf
+        dest: config.yaml
+        flat: yes
+    - ansible.builtin.shell:
+        cmd: kubeadm token create --print-join-command
+      register: join_command
+
+- name: Join node
+  hosts: nodes
+  become: true
+  tasks:
+    - ansible.builtin.set_fact:
+        master_name: "{{ groups['master'] | first }}"
+    - ansible.builtin.shell:
+        cmd: "{{ hostvars[master_name]['join_command'].stdout }}"

@@ -1,0 +1,25 @@
+all:
+  hosts:
+    vm1:
+      ansible_host: 192.168.64.158
+      ansible_user: ubuntu
+      ansible_ssh_private_key_file: ansible
+    vm2:
+      ansible_host: 192.168.64.159
+      ansible_user: ubuntu
+      ansible_ssh_private_key_file: ansible
+    vm3:
+      ansible_host: 192.168.64.160
+      ansible_user: ubuntu
+      ansible_ssh_private_key_file: ansible
+  children:
+    master:
+      hosts:
+        vm1:
+    control-planes:
+      hosts:
+        vm1:
+    nodes:
+      hosts:
+        vm2:
+        vm3:
