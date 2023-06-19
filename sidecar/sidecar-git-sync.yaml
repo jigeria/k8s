@@ -21,10 +21,10 @@ spec:
       - name: tmpvolume
         mountPath: /tmp/vol
 
-  - image: busybox
+  - image: ubuntu
     name: sidecar-container
     command: ["/bin/sh"]
-    args: ["-c", "while true; do cp /tmp/tmpvolume/sync-data/*.html /tmp/sharedvolume ; sleep 5; done"]
+    args: ["-c", "apt-get update -y && apt-get install rsync -y && while true; do rsync /tmp/tmpvolume/sync-data/*.html /tmp/sharedvolume ; sleep 5; done"]
     volumeMounts:
       - name: sharedvolume
         mountPath: /tmp/sharedvolume
