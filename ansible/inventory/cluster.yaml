@@ -1,15 +1,19 @@
 all:
   hosts:
     vm1:
-      ansible_host: 192.168.64.158
+      ansible_host: 192.168.64.180
       ansible_user: ubuntu
       ansible_ssh_private_key_file: ansible
     vm2:
-      ansible_host: 192.168.64.159
+      ansible_host: 192.168.64.181
       ansible_user: ubuntu
       ansible_ssh_private_key_file: ansible
     vm3:
-      ansible_host: 192.168.64.160
+      ansible_host: 192.168.64.182
+      ansible_user: ubuntu
+      ansible_ssh_private_key_file: ansible
+    vm4:
+      ansible_host: 192.168.64.183
       ansible_user: ubuntu
       ansible_ssh_private_key_file: ansible
   children:
@@ -23,3 +27,4 @@ all:
       hosts:
         vm2:
         vm3:
+        vm4:
