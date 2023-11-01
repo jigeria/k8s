@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  creationTimestamp: null
+  labels:
+    app: redis-deploy
+  name: redis-deploy
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis-deploy
+  strategy: {}
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        app: redis-deploy
+    spec:
+      containers:
+        - image: redis
+          name: redis
+          command: ["/bin/sh"]
+          args: [
+              "-c",
+              # "redis-server & sleep 5 && for i in {1..100}; do redis-cli SET '$i' hello && sleep 1; done",
+              "redis-server & sleep 5 && while true; do redis-cli SET app hello && sleep 1; done",
+            ]
+          volumeMounts:
+            - mountPath: /data
+              name: redis-volume
+          resources: {}
+
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      # volumes:
+      #   - name: sharedvolume
+      #     emptyDir: {}
+      #   - name: tmpvolume
+      #     emptyDir: {}
+      volumes:
+        - name: redis-volume
+          persistentVolumeClaim:
+            claimName: redis
+status: {}

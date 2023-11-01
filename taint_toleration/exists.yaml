@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx-toleration-exists
+spec:
+  containers:
+    - image: nginx
+      name: nginx
+      resources: {}
+  dnsPolicy: ClusterFirst
+  restartPolicy: Always
+  tolerations:
+    - effect: NoExecute
+      key: app
+      operator: Exists
+
+status: {}

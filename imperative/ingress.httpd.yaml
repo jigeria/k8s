@@ -1,0 +1,21 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: example.httpd
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+
+spec:
+  ingressClassName: traefik
+  rules:
+  - host: example.local.net
+    http:
+      paths:
+      - backend:
+          service:
+            name: httpd
+            port:
+              number: 80
+        path: /httpd
+        pathType: Prefix
+

@@ -18,30 +18,40 @@ spec:
         app: sidecar-git-sync
     spec:
       containers:
-      - image: nginx
-        name: nginx
-        volumeMounts:
-          - name: sharedvolume
-            mountPath: /usr/share/nginx/html
-        resources: {}
+        - image: nginx
+          name: nginx
+          volumeMounts:
+            - name: sharedvolume
+              mountPath: /usr/share/nginx/html
+          resources: {}
 
-      - image: registry.k8s.io/git-sync/git-sync:v3.6.6
-        name: git-sync
-        args: ["--repo=https://github.com/jigeria/k8s", "--root=/tmp/vol/", "--branch=main", "--dest=sync-data"]
-        volumeMounts:
-          - name: tmpvolume
-            mountPath: /tmp/vol
+        - image: registry.k8s.io/git-sync/git-sync:v3.6.6
+          name: git-sync
+          args:
+            [
+              "--repo=https://github.com/jigeria/k8s",
+              "--root=/tmp/vol/",
+              "--branch=main",
+              "--dest=sync-data",
+            ]
+          volumeMounts:
+            - name: tmpvolume
+              mountPath: /tmp/vol
 
-      - image: ubuntu
-        name: sidecar-container
-        command: ["/bin/sh"]
-        args: ["-c", "apt-get update -y && apt-get install rsync -y && while true; do rsync /tmp/tmpvolume/sync-data/*.html /tmp/sharedvolume ; sleep 5; done"]
-        volumeMounts:
-          - name: sharedvolume
-            mountPath: /tmp/sharedvolume
-          - name: tmpvolume
-            mountPath: /tmp/tmpvolume
-        
+        - image: ubuntu
+          name: sidecar-container
+          command: ["/bin/sh"]
+          args:
+            [
+              "-c",
+              "apt-get update -y && apt-get install rsync -y && while true; do rsync /tmp/tmpvolume/sync-data/*.html /tmp/sharedvolume ; sleep 5; done",
+            ]
+          volumeMounts:
+            - name: sharedvolume
+              mountPath: /tmp/sharedvolume
+            - name: tmpvolume
+              mountPath: /tmp/tmpvolume
+
       dnsPolicy: ClusterFirst
       restartPolicy: Always
       volumes:

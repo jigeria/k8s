@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  creationTimestamp: null
+  labels:
+    app: postgres-deploy
+  name: postgres-deploy
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres-deploy
+  strategy: {}
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        app: postgres-deploy
+    spec:
+      containers:
+        - image: postgres
+          name: postgres
+          volumeMounts:
+            - mountPath: /data
+              name: postgres-volume
+          resources: {}
+          env:
+            - name: POSTGRES_PASSWORD
+              value: 1234
+            - name: POSTGRES_USER
+              value: admin
+            - name: POSTGRES_DB
+              value: admin
+
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      # volumes:
+      #   - name: sharedvolume
+      #     emptyDir: {}
+      #   - name: tmpvolume
+      #     emptyDir: {}
+      volumes:
+        - name: postgres-volume
+          persistentVolumeClaim:
+            claimName: pvc-volume
+status: {}

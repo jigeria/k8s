@@ -1,0 +1,33 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx-affinity-jp4
+spec:
+  containers:
+    - image: nginx
+      name: nginx
+      resources: {}
+  dnsPolicy: ClusterFirst
+  restartPolicy: Always
+  tolerations:
+    - effect: NoExecute
+      key: xavier
+      operator: Exists
+  affinity:
+    nodeAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100 # weight에 따라서 조건이 충족될때 어떤 노드에 배치될지 우선순위설정
+          preference:
+            matchExpressions:
+              - key: xavier
+                operator: In
+                values:
+                  - "20.04"
+        - weight: 10
+          preference:
+            matchExpressions:
+              - key: xavier
+                operator: In
+                values:
+                  - "18.04"
+status: {}

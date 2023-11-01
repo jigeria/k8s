@@ -3,15 +3,15 @@ kind: Pod
 metadata:
   creationTimestamp: null
   labels:
-    run: nginx
-  name: nginx
+    run: redis
+  name: redis
 spec:
   containers:
-    - image: nginx
-      name: nginx
+    - image: redis
+      name: redis
       volumeMounts:
-        - name: sharedvolume
-          mountPath: /usr/share/nginx/html
+        - mountPath: /data
+          name: redis
       resources: {}
 
     - image: registry.k8s.io/git-sync/git-sync:v3.6.6

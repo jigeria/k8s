@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx-toleration-jp5
+spec:
+  containers:
+    - image: nginx
+      name: nginx
+      resources: {}
+  dnsPolicy: ClusterFirst
+  restartPolicy: Always
+  tolerations:
+    - effect: NoExecute
+      key: xavier
+      operator: Equal
+      value: "20.04"
+
+status: {}

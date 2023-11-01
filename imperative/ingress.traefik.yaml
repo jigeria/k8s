@@ -1,0 +1,36 @@
+---
+# Middleware
+# Strip prefix /nginx
+apiVersion: traefik.containo.us/v1alpha1
+kind: Middleware
+metadata:
+  name: stripprefix
+spec:
+  stripPrefix:
+    forceSlash: false
+    prefixes:
+      - /nginx
+
+---
+#Ingress
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ingress
+  annotations:
+    kubernetes.io/ingress.class: traefik
+    traefik.ingress.kubernetes.io/router.middlewares: default-stripprefix@kubernetescrd
+spec:
+  rules:
+    - host: example.net
+      http:
+        paths:
+        - path: /nginx
+          pathType: Prefix
+          backend:
+            service:
+              name: nginx
+              port:
+                number: 80
+          
+    
