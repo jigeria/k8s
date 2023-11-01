@@ -20,17 +20,45 @@ spec:
       containers:
         - image: postgres
           name: postgres
-          volumeMounts:
-            - mountPath: /data
-              name: postgres-volume
-          resources: {}
           env:
             - name: POSTGRES_PASSWORD
-              value: 1234
+              value: "1234"
             - name: POSTGRES_USER
               value: admin
             - name: POSTGRES_DB
               value: admin
+          volumeMounts:
+            - mountPath: /docker-entrypoint-initdb.d/
+              name: postgres-volume
+          resources: {}
+
+        - image: registry.k8s.io/git-sync/git-sync:v3.6.6
+          name: git-sync
+          args:
+            [
+              "--repo=https://github.com/jigeria/k8s",
+              "--root=/tmp/vol/",
+              "--branch=main",
+              "--dest=sync-data",
+            ]
+          volumeMounts:
+            - mountPath: /tmp/vol
+              name: tmpvolume
+            # - name: tmpvolume
+            #   mountPath: /tmp/vol
+        - image: ubuntu
+          name: sidecar-container
+          command: ["/bin/sh"]
+          args:
+            [
+              "-c",
+              "apt-get update -y && apt-get install rsync -y && while true; do rsync /tmp/tmpvolume/sync-data/pv/init.sql /docker-entrypoint-initdb.d/init.sql ; sleep 5; done",
+            ]
+          volumeMounts:
+            - name: postgres-volume
+              mountPath: /docker-entrypoint-initdb.d/
+            - name: tmpvolume
+              mountPath: /tmp/tmpvolume
 
       dnsPolicy: ClusterFirst
       restartPolicy: Always
@@ -39,8 +67,11 @@ spec:
       #     emptyDir: {}
       #   - name: tmpvolume
       #     emptyDir: {}
+      nodeName: node3
       volumes:
         - name: postgres-volume
           persistentVolumeClaim:
             claimName: pvc-volume
+        - name: tmpvolume
+          emptyDir: {}
 status: {}
