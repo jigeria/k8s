@@ -1,0 +1,96 @@
+# apiVersion: v1
+# kind: PersistentVolumeClaim
+# metadata:
+#   name: pvc-volume
+# spec:
+#   accessModes:
+#     - ReadWriteOnce
+#   resources:
+#     requests:
+#       storage: 50Mi
+# ---
+apiVersion: v1
+data:
+  PGDATA: L3Zhci9saWIvcG9zdGdyZXNxbC9kYXRhL3BnZGF0YQ==
+  POSTGRES_DB: YWRtaW4=
+  POSTGRES_PASSWORD: MTIzNA==
+  POSTGRES_USER: YWRtaW4=
+kind: Secret
+metadata:
+  creationTimestamp: null
+  name: postgres-secrets
+---
+apiVersion: v1
+data:
+  init-sql: |-
+    CREATE TABLE IF NOT EXISTS CARD_INFO (user_id SERIAL PRIMARY KEY, user_name VARCHAR(50) UNIQUE NOT NULL, card_number VARCHAR(50) NOT NULL);
+kind: ConfigMap
+metadata:
+  creationTimestamp: null
+  name: configmap-postgres
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  creationTimestamp: null
+  labels:
+    app: postgres-deploy
+  name: postgres-deploy
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres-deploy
+  strategy: {}
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        app: postgres-deploy
+    spec:
+      containers:
+        - image: postgres
+          name: postgres
+          envFrom:
+            - secretRef:
+                name: postgres-secrets
+          volumeMounts:
+            # - mountPath: /docker-entrypoint-initdb.d
+            - mountPath: /docker-entrypoint-initdb.d/
+              name: postgres-initdb
+            - mountPath: /var/lib/postgresql/data
+              name: postgres-volume
+              # subPath: postgres
+          resources: {}
+
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      nodeName: node3
+      volumes:
+        - name: postgres-volume
+          persistentVolumeClaim:
+            claimName: pvc-volume
+        - name: postgres-initdb
+          configMap:
+            name: configmap-postgres
+status: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  creationTimestamp: null
+  labels:
+    app: postgres-svc
+  name: postgres-svc
+spec:
+  ports:
+    - name: 5432-5432
+      port: 5432
+      protocol: TCP
+      targetPort: 5432
+  selector:
+    app: postgres-deploy
+  type: LoadBalancer
+status:
+  loadBalancer: {}
